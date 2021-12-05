@@ -1,46 +1,60 @@
 import requests
-import pandas
+import json
+import pandas as pd
 import numpy
 import matplotlib.pyplot as plt
 import datetime
 
+from utils import datetime_object_builder
 
-symbols = ['BTC', 'ETH']
-API_KEY = '1weKMNY8IzaBh00jQZXZrYZFseS'
+
+API_KEY = ''
 
 
 class ChartBuilder:
     def __init__(self, symbol):
         self.symbol = symbol
-    
-    def get_data(self):
-        self.r = requests.get('https://api.glassnode.com/v1/metrics/market/price_usd_close', params={'a': self.symbol, 'api_key': API_KEY})
-        self.df = pandas.read_json(self.r.text, convert_dates=['t'])
-        self.df['v_log10'] = numpy.log10(self.df['v'])
-        #print(self.df)
-    
-    def build_plot(self):
-        self.plt = plt
-        self.plt.rcParams['figure.figsize'] = (20, 12)
-        self.plt.plot(self.df.t, self.df.v, color='black')
-        self.plt.yscale('log')
-        self.plt.xlim(datetime.date(2010, 7, 17), datetime.date(2030, 12, 31))
-        self.plt.ylim(10**-2, 10**6)
-        self.plt.grid(b=True, which='both', axis='both')
-        self.plt.title(self.symbol)
-        self.plt.ylabel('Price (log10)')
-        self.fig = self.plt.gcf()
-        self.plt.show()
-    
-    def save_plot(self):
-        self.fig.savefig('./desktop/' + self.symbol + '_' + str(datetime.date.today()) + '.png')
+        r = requests.get('https://api.glassnode.com/v1/metrics/market/price_usd_ohlc', params={'a': self.symbol, 'api_key': API_KEY})
+        json = r.json()
 
+        self.df = pd.json_normalize(json, sep='_')
+        self.df['t'] = pd.to_datetime(self.df['t'], unit='s')
+        self.df = self.df.rename({'t': 'date', 'o_c': 'close', 'o_h': 'high', 'o_l': 'low', 'o_o': 'open'}, axis=1)
+        self.df = self.df[['date', 'open', 'high', 'low', 'close']]
+        self.df['open_log10'] = numpy.log10(self.df['open'])
+        self.df['high_log10'] = numpy.log10(self.df['high'])
+        self.df['low_log10'] = numpy.log10(self.df['low'])
+        self.df['close_log10'] = numpy.log10(self.df['close'])
+        print(self.df)
         
-# main
-for symbol in symbols:
-    x = ChartBuilder(symbol)
-    x.get_data()
-    x.build_plot()
-    x.save_plot()
-    print(f'{symbol} chart saved.')
-print('Done.')
+    def build_line(self, linearlog, sy=None, sm=None, sd=None, ey=None, em=None, ed=None, savechart=False):
+        s_obj, e_obj = datetime_object_builder(self.df, sy, sm, sd, ey, em, ed)
+            
+        plt.rcParams['figure.figsize'] = (15, 9)
+        plt.plot(self.df.date, self.df.close, color='black')
+        plt.xlim(s_obj, e_obj)
+        plt.grid(b=True, which='both', axis='both')
+        if linearlog == 'linear':
+            plt.ylim(0, self.df['close'].max() * 1.7)
+            plt.grid(b=True, which='both', axis='both')
+            plt.title(self.symbol)
+            plt.ylabel('USD') 
+        elif linearlog == 'log':
+            plt.ylim(self.df['close'].min(), 10**6)
+            plt.yscale('log')
+            plt.title(self.symbol)
+            plt.ylabel('USD (log10)')
+        fig = plt.gcf()
+        plt.show()
+        
+        #if savechart:
+            #fig.savefig(self.symbol + '_' + str(datetime.date.today()) + '.png')
+    
+    def build_ohlc(self, linearlog, savechart=False):
+        if linearlog == 'linear':
+            pass
+        elif linearlog == 'log':
+            pass
+        
+        if savechart:
+            pass
